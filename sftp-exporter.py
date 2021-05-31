@@ -87,13 +87,6 @@ async def noop_checker(client, folder, host, now, matcher):
     return matched_files
 
 
-async def upload_temp_file_check():
-    """Upload temporary file into SFTP server, and remove.
-
-    Report successful status.
-    """
-
-
 def check(callback, **sftp_details):
     """Configure and start a single SFTP check.
 
