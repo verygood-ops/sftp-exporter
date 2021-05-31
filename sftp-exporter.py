@@ -6,6 +6,7 @@ import fnmatch
 import functools
 import logging
 import os
+import socket
 import string
 import time
 
@@ -37,6 +38,9 @@ sftp_file_seen_timestamp = Gauge(name='sftp_last_seen_timestamp',
                                  documentation='Last timestamp when '
                                                'a file have been seen over SFTP.',
                                  labelnames=['folder', 'file', 'host'])
+sftp_host_up = Gauge(name='sftp_host_up',
+                     documentation='Signalizes SFTP host being UP',
+                     labelnames=['host', 'username', 'state'])
 
 
 def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
@@ -56,7 +60,7 @@ def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
     return any([fnmatch.fnmatch(f, p) for p in patterns])
 
 
-async def noop_checker(client, folder, host, matcher):
+async def noop_checker(client, folder, host, now, matcher):
     """This checker lists every folder and does no operation then.
 
     Exports sftp_file_seen_timestamp for each seen file that matches pattern.
@@ -67,15 +71,23 @@ async def noop_checker(client, folder, host, matcher):
     :type folder: str
     :param host: A host to connect to (will be used in labels).
     :type host: str
+    :param now: Current UNIX timestamp
+    :type now: int
     :param matcher: A matcher callback to invoke on each file found.
     :type matcher: function
     """
-    now = int(time.time())
     files = await client.listdir(folder)
     matched_files = [f for f in files if matcher(f)]
     for m_f in matched_files:
         sftp_file_seen_timestamp.labels(folder, m_f, host).set(now)
     return matched_files
+
+
+async def upload_temp_file_check():
+    """Upload temporary file into SFTP server, and remove.
+
+    Report successful status.
+    """
 
 
 def check(callback, **sftp_details):
@@ -127,6 +139,7 @@ def check(callback, **sftp_details):
 
     async def checker():
         """Invoke actual check logic."""
+        now = int(time.time())
         kw = {
             'host': host,
             'port': port,
@@ -138,18 +151,32 @@ def check(callback, **sftp_details):
             kw['client_keys'] = [client_key_file, ]
         if not validate_known_hosts:
             kw['client_factory'] = _trusting_client
-        async with asyncssh.connect(**kw) as conn:
+        conn = None
+        try:
+            conn = await asyncssh.connect(**kw)
             try:
                 client = await conn.start_sftp_client()
             except asyncssh.SFTPError:
                 logger.exception('Failed to contact host {}'.format(host))
+                sftp_host_up.labels(host, username, 'SFTPError').set(now)
             else:
+                sftp_host_up.labels(host, username, 'Ok').set(now)
                 await asyncio.gather(
                     *[
-                        check_callback(client, prepare_folder(folder), host, match_callback)
+                        check_callback(client, prepare_folder(folder), host, now, match_callback)
                         for folder in folders
                     ]
                 )
+        except asyncssh.Error:
+            logger.exception('Failed to establish connection to {}'.format(host))
+            sftp_host_up.labels(host, username, 'ConnectError').set(now)
+        except socket.gaierror:
+            logger.exception('Not found host name {}'.format(host))
+            sftp_host_up.labels(host, username, 'DNSError').set(now)
+        finally:
+            if conn:
+                conn.close()
+                await conn.wait_closed()
 
     async def checker_loop():
         """Infinite loop that spawns checker tasks."""
