@@ -51,13 +51,17 @@ def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
     :param patterns: List of patterns for which reporting is enabled.
     :param f: A file name being tested.
     """
-    if smart_date_pattern:
-        now_date = dateparser.parse(base_pattern_date)
-        patterns = [
-            datetime.datetime.strftime(now_date, p)
-            for p in patterns
-        ]
-    return any([fnmatch.fnmatch(f, p) for p in patterns])
+    if f in ['.', '..']:
+        ret = False
+    else:
+        if smart_date_pattern:
+            now_date = dateparser.parse(base_pattern_date)
+            patterns = [
+                datetime.datetime.strftime(now_date, p)
+                for p in patterns
+            ]
+        ret = any([fnmatch.fnmatch(f, p) for p in patterns])
+    return ret
 
 
 async def noop_checker(client, folder, host, now, matcher):
