@@ -1,0 +1,9 @@
+checks:
+  - host: sftp.my.org
+    port: 222
+    username: test-user
+    password: "${SFTP_PASSWORD}"
+    folders:
+      - www
+    patterns:
+      - '*hello_world*'
