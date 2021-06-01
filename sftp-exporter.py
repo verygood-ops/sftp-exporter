@@ -2,13 +2,16 @@
 import argparse
 import asyncio
 import datetime
+import filecmp
 import fnmatch
 import functools
 import logging
 import os
 import socket
 import string
+import tempfile
 import time
+import uuid
 
 from aiohttp import web
 import asyncssh
@@ -41,6 +44,15 @@ sftp_file_seen_timestamp = Gauge(name='sftp_last_seen_timestamp',
 sftp_host_up = Gauge(name='sftp_host_up',
                      documentation='Signalizes SFTP host being UP',
                      labelnames=['host', 'username', 'state'])
+sftp_put_file_up = Gauge(name='sftp_put_file_up',
+                         documentation='Signalizes SFTP folder write-able',
+                         labelnames=['host', 'username', 'folder', 'state'])
+sftp_get_file_up = Gauge(name='sftp_get_file_up',
+                         documentation='Signalizes SFTP folder read-able',
+                         labelnames=['host', 'username', 'folder', 'state'])
+sftp_del_file_up = Gauge(name='sftp_del_file_up',
+                         documentation='Signalizes SFTP folder delete-able',
+                         labelnames=['host', 'username', 'folder', 'state'])
 
 
 def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
@@ -64,7 +76,7 @@ def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
     return ret
 
 
-async def noop_checker(client, folder, host, now, matcher):
+async def noop_checker(client, folder, now, matcher, **sftp_details):
     """This checker lists every folder and does no operation then.
 
     Exports sftp_file_seen_timestamp for each seen file that matches pattern.
@@ -73,18 +85,81 @@ async def noop_checker(client, folder, host, now, matcher):
     :type client: asyncssh.SFTPClient
     :param folder: A folder to list when connecting.
     :type folder: str
-    :param host: A host to connect to (will be used in labels).
-    :type host: str
     :param now: Current UNIX timestamp
     :type now: int
     :param matcher: A matcher callback to invoke on each file found.
     :type matcher: function
+    :param sftp_details: SFTP details config
+    :type sftp_details: dict
     """
     files = await client.listdir(folder)
     matched_files = [f for f in files if matcher(f)]
     for m_f in matched_files:
-        sftp_file_seen_timestamp.labels(folder, m_f, host).set(now)
+        sftp_file_seen_timestamp.labels(folder, m_f, sftp_details['host']).set(now)
     return matched_files
+
+
+async def put_get_del_checker(client, folder, now, matcher, **sftp_details):
+    """This checker uploads .healthcheck file to given folder, gets it,
+     compares value and then removes.
+
+    :param client: Asyncssh's SFTP client.
+    :type client: asyncssh.SFTPClient
+    :param folder: A folder to list when connecting.
+    :type folder: str
+    :param now: Current UNIX timestamp
+    :type now: int
+    :param matcher: A matcher callback to invoke on each file found.
+    :type matcher: function
+    :param sftp_details: SFTP details config
+    :type sftp_details: dict
+     """
+    await noop_checker(client, folder,  now, matcher, **sftp_details)
+    check_file_name = sftp_details.get('check_file_name', '.sftp-exporter-health-check')
+    if 'check_file_contents' in sftp_details:
+        check_file_contents = sftp_details.get('check_file_contents')
+    else:
+        check_file_contents = uuid.uuid4().hex
+
+    host = sftp_details['host']
+    username = sftp_details.get('username', 'sftp')
+
+    def expose(_metric, _state):
+        """Expose given metric of put_get_del set."""
+        _metric.labels(host, username, folder, _state).set(now)
+
+    remote_file_name = os.path.join(folder, check_file_name)
+    fdw, pathw = tempfile.mkstemp()
+    try:
+        with os.fdopen(fdw, 'w') as tmp:
+            tmp.write(check_file_contents)
+        await client.put(pathw, remote_file_name)
+        expose(sftp_put_file_up, 'Ok')
+        fdr, pathr = tempfile.mkstemp()
+        try:
+            await client.get(remote_file_name, pathr)
+            if filecmp.cmp(pathw, pathr):
+                expose(sftp_get_file_up, 'Ok')
+            else:
+                expose(sftp_get_file_up, 'Corrupted')
+            try:
+                await client.remove(remote_file_name)
+                expose(sftp_del_file_up, 'Ok')
+                logger.info('put_get_del check finished for {}'.format(sftp_details['host']))
+            except asyncssh.SFTPError:
+                logger.exception('Failed to perform DEL on {}'.format(sftp_details['host']))
+                expose(sftp_del_file_up, 'Error')
+
+        except asyncssh.SFTPError:
+            logger.exception('Failed to perform GET on {}'.format(host))
+            expose(sftp_get_file_up, 'Error')
+        finally:
+            os.remove(pathr)
+    except asyncssh.SFTPError:
+        logger.exception('Failed to perform PUT on {}'.format(host))
+        expose(sftp_put_file_up, 'Error')
+    finally:
+        os.remove(pathw)
 
 
 def check(callback, **sftp_details):
@@ -160,7 +235,8 @@ def check(callback, **sftp_details):
                 sftp_host_up.labels(host, username, 'Ok').set(now)
                 await asyncio.gather(
                     *[
-                        check_callback(client, prepare_folder(folder), host, now, match_callback)
+                        check_callback(client, prepare_folder(folder), now,
+                                       match_callback, **sftp_details)
                         for folder in folders
                     ]
                 )

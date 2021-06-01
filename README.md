@@ -24,7 +24,7 @@ How to run in docker
 
 ```bash
 docker run -v <path_to_config>:/config.yml \
- -it quay.io/verygoodsecurity/sftp-exporter:dev-1.0.0
+ -it quay.io/verygoodsecurity/sftp-exporter:dev-2.0.0
 ```
 
 How to configure
@@ -51,6 +51,9 @@ Available properties for SFTP check configuration:
 - `folders` List of folders to check files in (defaults to single item `/`)
 - `patterns` List of patterns to check files in (defaults to single pattern `*`)
 - `validate_known_hosts` Whether to validate known hosts or not
+- `checker` Check algorithm to be used. Defaults to `noop`,
+  that only lists files in each SFTP folder,
+  when set to `put_get_del` will perform sequence of operations in each folder.
 
 Smart date handling in file path
 --------------------------------
@@ -86,12 +89,56 @@ Base date values are parsed with `dateparser`.
 Exported metrics
 ----------------
 
+----------
+
+`sftp_host_up` -- when the SFTP host have been successfully accessed for the last time
+
+Dimensions:
+- `host` Host of SFTP server that is being monitored
+- `username` Name of user used for connection
+- `state` State of connection, can be one of `Ok`, `DNSError`, `SFTPError`
+
+----------
+
+`sftp_put_file_up` -- when the put check have been done successfully for the last time
+
+Dimensions:
+- `host` Host of SFTP server that is being monitored
+- `folder` Folder that have been checked for write-ability
+- `username` Username that have been logging in
+- `state` State of write-ability, one of `Ok`, `Error`
+
+-----------
+
+`sftp_get_file_up` -- when the get check have been done successfully for the last time
+
+Dimensions:
+- `host` Host of SFTP server that is being monitored
+- `folder` Folder that have been checked for read-ability
+- `username` Username that have been logging in
+- `state` State of write-ability, one of `Ok`, `Corrupted`, `Error`
+
+-----------
+
+`sftp_del_file_up` -- when the remove check have been done successfully for the last time
+
+Dimensions:
+- `host` Host of SFTP server that is being monitored
+- `folder` Folder that have been checked for remove-ability
+- `username` Username that have been logging in
+- `state` State of write-ability, one of `Ok`, `Error`
+
+
+----------
+
 `sftp_last_seen_timestamp` -- when the file was spotted on SFTP server last time
 
-Dimensions
+Dimensions:
  - `folder` Folder name where file was spotted
  - `file` Name of the file have been spotted
  - `host` Host of SFTP server that housed a file
+
+----------
 
 License
 -------
