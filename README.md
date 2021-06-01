@@ -71,7 +71,7 @@ For example,
 checks:
   - smart_pattern_date: true
     patterns:
-      - "*%y%m%d*"
+      - "*%Y%m%d*"
 ```
 when called on 31 May, 2021 will match all files that have
 `20210531` in the file name.
