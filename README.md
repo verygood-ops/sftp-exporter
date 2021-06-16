@@ -51,9 +51,16 @@ Available properties for SFTP check configuration:
 - `folders` List of folders to check files in (defaults to single item `/`)
 - `patterns` List of patterns to check files in (defaults to single pattern `*`)
 - `validate_known_hosts` Whether to validate known hosts or not
-- `checker` Check algorithm to be used. Defaults to `noop`,
-  that only lists files in each SFTP folder,
-  when set to `put_get_del` will perform sequence of operations in each folder.
+- `checker` Check algorithm identifier to be used.
+
+Checker algorithms
+-------------------
+
+Following checker algorithms are available for use:
+
+Default checker algorithm is `noop`, that only lists files in each SFTP folder,
+Checker algorithm identified as `put_get_del` will perform sequence of operations in each folder,
+An algorithm named `attributes` will export mtime,atime and size for each file.
 
 Smart date handling in file path
 --------------------------------
@@ -139,6 +146,35 @@ Dimensions:
  - `host` Host of SFTP server that housed a file
 
 ----------
+
+
+`sftp_file_modified_timestamp` -- `mtime` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
+`sftp_file_access_timestamp` -- `atime` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
+`sftp_file_size` -- `size` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
 
 License
 -------

@@ -37,10 +37,12 @@ arg_parser.add_argument('-P', '--port', type=str, default=9339,
                         help='Listen on this port.')
 arg_parser.add_argument('--skip-wrong-config', action='store_true',
                         help='Dont exit on wrong config.')
+# "noop" (listdir) timestamp
 sftp_file_seen_timestamp = Gauge(name='sftp_last_seen_timestamp',
                                  documentation='Last timestamp when '
                                                'a file have been seen over SFTP.',
                                  labelnames=['folder', 'file', 'host'])
+# sftp host health check metrics
 sftp_host_up = Gauge(name='sftp_host_up',
                      documentation='Signalizes SFTP host being UP',
                      labelnames=['host', 'username', 'state'])
@@ -53,6 +55,16 @@ sftp_get_file_up = Gauge(name='sftp_get_file_up',
 sftp_del_file_up = Gauge(name='sftp_del_file_up',
                          documentation='Signalizes SFTP folder delete-able',
                          labelnames=['host', 'username', 'folder', 'state'])
+# "attributes" exported metrics
+sftp_file_modified_timestamp = Gauge(name='sftp_file_modified_timestamp',
+                                     documentation='Signalizes SFTP mtime attribute',
+                                     labelnames=['folder', 'file', 'host'])
+sftp_file_access_timestamp = Gauge(name='sftp_file_access_timestamp',
+                                   documentation='Signalizes SFTP mtime attribute',
+                                   labelnames=['folder', 'file', 'host'])
+sftp_file_size = Gauge(name='sftp_file_size',
+                       documentation='Signalizes SFTP mtime attribute',
+                       labelnames=['folder', 'file', 'host'])
 
 
 def file_matcher(smart_date_pattern, base_pattern_date, patterns, f):
@@ -96,6 +108,34 @@ async def noop_checker(client, folder, now, matcher, **sftp_details):
     matched_files = [f for f in files if matcher(f)]
     for m_f in matched_files:
         sftp_file_seen_timestamp.labels(folder, m_f, sftp_details['host']).set(now)
+    return matched_files
+
+
+async def attributes_checker(client, folder, now, matcher, **sftp_details):
+    """This checker uses `readdir()` to get context of a folder,
+        with attributes of each file exported.
+
+    :param client: Asyncssh's SFTP client.
+    :type client: asyncssh.SFTPClient
+    :param folder: A folder to list when connecting.
+    :type folder: str
+    :param now: Current UNIX timestamp
+    :type now: int
+    :param matcher: A matcher callback to invoke on each file found.
+    :type matcher: function
+    :param sftp_details: SFTP details config
+    :type sftp_details: dict
+    :return:
+    """
+    files = await client.readdir(folder)
+    matched_files = [f for f in files if matcher(f.filename)]
+    for m_f in matched_files:
+        sftp_file_modified_timestamp\
+            .labels(folder, m_f.filename, sftp_details['host']).set(m_f.attrs.mtime)
+        sftp_file_access_timestamp \
+            .labels(folder, m_f.filename, sftp_details['host']).set(m_f.attrs.atime)
+        sftp_file_size \
+            .labels(folder, m_f.filename, sftp_details['host']).set(m_f.attrs.size)
     return matched_files
 
 
