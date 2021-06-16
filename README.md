@@ -147,6 +147,35 @@ Dimensions:
 
 ----------
 
+
+`sftp_file_modified_timestamp` -- `mtime` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
+`sftp_file_access_timestamp` -- `atime` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
+`sftp_file_size` -- `size` attribute as reported by SFTP server
+
+Dimensions:
+- `folder` Folder name where file was spotted
+- `file` Name of the file have been spotted
+- `host` Host of SFTP server that housed a file
+
+----------
+
+
 License
 -------
 MIT.
