@@ -284,8 +284,7 @@ def check(callback, **sftp_details):
             logger.exception('Not found host name {}'.format(host))
             sftp_host_up.labels(host, username, 'DNSError').set(now)
         except (OSError, asyncssh.Error):
-            logger.exception(
-                'Failed to establish connection to {}'.format(host))
+            logger.exception('Failed to establish connection to {}'.format(host))
             sftp_host_up.labels(host, username, 'ConnectError').set(now)
         finally:
             if conn:
