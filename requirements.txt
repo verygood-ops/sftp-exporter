@@ -6,7 +6,7 @@ cffi==1.14.5
 chardet==4.0.0
 cryptography==3.4.7
 dateparser==1.0.0
-idna==3.2
+idna==3.7
 multidict==5.1.0
 prometheus-async==19.2.0
 prometheus-client==0.10.1
