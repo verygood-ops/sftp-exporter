@@ -8,8 +8,9 @@ on:
 
 jobs:
   scan:
-    uses: verygood-ops/cicd-shared/.github/workflows/security-scan-sast.yaml@security-scan-sast-v1
+    uses: verygood-ops/cicd-shared/.github/workflows/security-scan-sast.yaml@security-scan-sast-v2
     with:
       uses_maven: false
     secrets:
       SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      SAST_SLACK_WORKFLOW_WEBHOOK: ${{ secrets.SAST_SLACK_WORKFLOW_WEBHOOK }}
